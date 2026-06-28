@@ -1,0 +1,103 @@
+# ----------------------------------------------------------------------------
+# Flutter & Dart
+# ----------------------------------------------------------------------------
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+doc/api/
+.metadata
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# ----------------------------------------------------------------------------
+# Android
+# ----------------------------------------------------------------------------
+android/**/generated/
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/key.properties
+android/local.properties
+android/bundle/
+android/captures/
+*.jks
+*.keystore
+
+# ----------------------------------------------------------------------------
+# iOS / macOS
+# ----------------------------------------------------------------------------
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/ephemeral/
+ios/Runner/GeneratedPluginRegistrant.h
+ios/Runner/GeneratedPluginRegistrant.m
+macos/Flutter/ephemeral/
+macos/Flutter/Generated.xcconfig
+macos/Flutter/flutter_export_environment.sh
+macos/Runner/GeneratedPluginRegistrant.swift
+**/DerivedData/
+*.moved-aside
+*.xcuserstate
+*.xcworkspace
+!default.xcworkspace
+
+# ----------------------------------------------------------------------------
+# Windows
+# ----------------------------------------------------------------------------
+windows/flutter/ephemeral/
+windows/flutter/generated_plugins.cmake
+windows/runner/GeneratedPluginRegistrant.h
+windows/runner/GeneratedPluginRegistrant.cpp
+
+# ----------------------------------------------------------------------------
+# Linux
+# ----------------------------------------------------------------------------
+linux/flutter/ephemeral/
+linux/flutter/generated_plugins.cmake
+linux/runner/generated_plugin_registrant.h
+linux/runner/generated_plugin_registrant.cc
+
+# ----------------------------------------------------------------------------
+# Web
+# ----------------------------------------------------------------------------
+.last_build_id
+
+# ----------------------------------------------------------------------------
+# IDEs
+# ----------------------------------------------------------------------------
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+*.code-workspace
+
+# ----------------------------------------------------------------------------
+# OS Specific
+# ----------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------------------------------------------------------------
+# Environment / Secrets
+# ----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+secrets.tar
+*.gpg
