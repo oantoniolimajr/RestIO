@@ -16,9 +16,112 @@ class RestProvider extends ChangeNotifier {
   }
 
   void updateUrl(String url) {
-    request.url = url;
-    _syncUrlToParams();
+    if (url.trim().startsWith('curl ')) {
+      _importCurl(url);
+    } else {
+      request.url = url;
+      _syncUrlToParams();
+    }
     notifyListeners();
+  }
+
+  void _importCurl(String curl) {
+    // 1. Pre-process: handle line continuations and normalize spaces
+    final cleanCurl = curl.replaceAll('\\\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    // 2. Extract Method
+    final methodMatch = RegExp(r"(?:-X|--request)\s+([A-Z]+)").firstMatch(cleanCurl);
+    if (methodMatch != null) {
+      final methodName = methodMatch.group(1);
+      request.method = HttpMethod.values.firstWhere(
+        (e) => e.name == methodName, 
+        orElse: () => HttpMethod.GET
+      );
+    } else if (cleanCurl.contains('--data') || cleanCurl.contains('-d ')) {
+      request.method = HttpMethod.POST;
+    } else {
+      request.method = HttpMethod.GET;
+    }
+
+    // 3. Extract URL
+    final urlMatch = RegExp(r"'(https?://[^']+)'").firstMatch(cleanCurl) ?? 
+                    RegExp(r'"(https?://[^"]+)"').firstMatch(cleanCurl) ??
+                    RegExp(r"\s(https?://[^\s']+)").firstMatch(cleanCurl);
+    if (urlMatch != null) {
+      request.url = urlMatch.group(1) ?? '';
+    }
+
+    // 4. Extract Headers
+    final List<KeyValue> newHeaders = [];
+    // Using triple single quotes to allow double quotes inside without escaping issues
+    final headerRegex = RegExp(r'''(?:-H|--header)\s+(['"])(.*?)\1''');
+    final headerMatches = headerRegex.allMatches(cleanCurl);
+
+    for (final m in headerMatches) {
+      final headerContent = m.group(2) ?? '';
+      if (headerContent.contains(':')) {
+        final colonIdx = headerContent.indexOf(':');
+        final key = headerContent.substring(0, colonIdx).trim();
+        final value = headerContent.substring(colonIdx + 1).trim();
+        
+        if (key.toLowerCase() == 'authorization') {
+          _handleAuthHeader(value);
+        } else {
+          newHeaders.add(KeyValue(key: key, value: value, enabled: true));
+        }
+      }
+    }
+    request.headers = newHeaders.isEmpty ? [KeyValue()] : newHeaders;
+
+    // 5. Extract Body
+    final bodyRegex = RegExp(r'''(?:-d|--data(?:-raw|-binary)?)\s+(['"])(.*?)\1''');
+    final bodyMatch = bodyRegex.firstMatch(cleanCurl);
+    
+    if (bodyMatch != null) {
+      request.bodyType = BodyType.raw;
+      request.bodyContent = bodyMatch.group(2) ?? '';
+      if (request.bodyContent.trim().startsWith('{') || request.bodyContent.trim().startsWith('[')) {
+        request.rawType = RawType.json;
+        try {
+          final decoded = jsonDecode(request.bodyContent);
+          request.bodyContent = const JsonEncoder.withIndent('    ').convert(decoded);
+        } catch (_) {}
+      }
+    } else {
+      request.bodyType = BodyType.none;
+      request.bodyContent = '';
+    }
+
+    // 6. Extract Basic Auth Flag (-u)
+    final userRegex = RegExp(r'''(?:-u|--user)\s+(['"]?)(.*?)\1(?:\s|$)''');
+    final userMatch = userRegex.firstMatch(cleanCurl);
+    if (userMatch != null) {
+      final credentials = userMatch.group(2) ?? '';
+      if (credentials.contains(':')) {
+        request.authType = 'Basic Auth';
+        request.authData['username'] = credentials.split(':')[0];
+        request.authData['password'] = credentials.split(':')[1];
+      }
+    }
+
+    // Sync Params table from the newly extracted URL
+    _syncUrlToParams();
+  }
+
+  void _handleAuthHeader(String value) {
+    if (value.toLowerCase().startsWith('bearer ')) {
+      request.authType = 'Bearer Token';
+      request.authData['token'] = value.substring(7).trim();
+    } else if (value.toLowerCase().startsWith('basic ')) {
+      request.authType = 'Basic Auth';
+      try {
+        final decoded = utf8.decode(base64.decode(value.substring(6).trim()));
+        if (decoded.contains(':')) {
+          request.authData['username'] = decoded.split(':')[0];
+          request.authData['password'] = decoded.split(':')[1];
+        }
+      } catch (_) {}
+    }
   }
 
   void updateQueryParams() {
@@ -31,7 +134,6 @@ class RestProvider extends ChangeNotifier {
     if (uri == null) return;
 
     if (!uri.hasQuery) {
-      // Only reset if there was something before to avoid unnecessary notifications
       if (request.queryParams.length > 1 || (request.queryParams.isNotEmpty && request.queryParams[0].key.isNotEmpty)) {
         request.queryParams = [KeyValue()];
       }
@@ -71,7 +173,6 @@ class RestProvider extends ChangeNotifier {
     final method = request.method.name;
     var url = request.url;
     
-    // Add query params to URL if not already there
     final enabledQueryParams = request.queryParams.where((kv) => kv.enabled && kv.key.isNotEmpty).toList();
     if (enabledQueryParams.isNotEmpty) {
       final queryString = enabledQueryParams.map((kv) => '${Uri.encodeComponent(kv.key)}=${Uri.encodeComponent(kv.value)}').join('&');
@@ -80,7 +181,6 @@ class RestProvider extends ChangeNotifier {
 
     final List<String> curlParts = ["curl -X $method '$url'"];
 
-    // Headers
     Map<String, String> headers = {};
     for (var kv in request.headers) {
       if (kv.enabled && kv.key.isNotEmpty) {
@@ -88,7 +188,6 @@ class RestProvider extends ChangeNotifier {
       }
     }
 
-    // Auth
     if (request.authType == 'Bearer Token' && request.authData.containsKey('token')) {
       headers['Authorization'] = 'Bearer ${request.authData['token']}';
     } else if (request.authType == 'Basic Auth') {
@@ -109,7 +208,6 @@ class RestProvider extends ChangeNotifier {
       curlParts.add("-H '$key: $value'");
     });
 
-    // Body
     if (request.bodyType == BodyType.raw && request.bodyContent.isNotEmpty) {
       final escapedBody = request.bodyContent.replaceAll("'", "'\\''");
       curlParts.add("-d '$escapedBody'");
@@ -128,7 +226,7 @@ class RestProvider extends ChangeNotifier {
     sb.writeln();
     sb.writeln("--- RESPONSE ---");
     sb.writeln("Status: ${response!.statusCode} ${response!.statusMessage ?? ""}");
-    sb.writeln("Time: ${response!.time?.inMilliseconds ?? 0}ms");
+    sb.writeln("Time: ${response!.time.inMilliseconds}ms");
     
     if (response!.headers.isNotEmpty) {
       sb.writeln("\nHeaders:");
@@ -166,7 +264,6 @@ class RestProvider extends ChangeNotifier {
 
     final startTime = DateTime.now();
     try {
-      // Prepare query params
       Map<String, dynamic> queryParameters = {};
       for (var kv in request.queryParams) {
         if (kv.enabled && kv.key.isNotEmpty) {
@@ -174,7 +271,6 @@ class RestProvider extends ChangeNotifier {
         }
       }
 
-      // Prepare headers
       Map<String, dynamic> headers = {};
       for (var kv in request.headers) {
         if (kv.enabled && kv.key.isNotEmpty) {
@@ -182,19 +278,22 @@ class RestProvider extends ChangeNotifier {
         }
       }
 
-      // Handle Auth
       if (request.authType == 'Bearer Token' && request.authData.containsKey('token')) {
         headers['Authorization'] = 'Bearer ${request.authData['token']}';
       } else if (request.authType == 'Basic Auth') {
-        // Basic auth logic
+        if (request.authData.containsKey('username') && request.authData.containsKey('password')) {
+            final user = request.authData['username'] ?? '';
+            final pass = request.authData['password'] ?? '';
+            final bytes = utf8.encode('$user:$pass');
+            headers['Authorization'] = 'Basic ${base64.encode(bytes)}';
+        }
       }
 
-      // Handle Body
       dynamic body;
       if (request.bodyType == BodyType.formData) {
-        body = FormData.fromMap({}); // Simple implementation
+        body = FormData.fromMap({}); 
       } else if (request.bodyType == BodyType.xWwwFormUrlEncoded) {
-        body = {}; // Simple implementation
+        body = {}; 
       } else if (request.bodyType == BodyType.raw) {
         body = request.bodyContent;
         if (request.rawType == RawType.json) {
@@ -215,7 +314,6 @@ class RestProvider extends ChangeNotifier {
 
       final endTime = DateTime.now();
       
-      // Calculate request size (URL + Headers + Body)
       int reqSize = request.url.length;
       headers.forEach((k, v) => reqSize += k.length + v.toString().length);
       if (body != null) {

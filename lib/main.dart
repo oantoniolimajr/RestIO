@@ -131,7 +131,6 @@ class _MainScreenState extends State<MainScreen> {
                       child: TextField(
                         controller: _urlController,
                         style: const TextStyle(fontSize: 13),
-                        textAlignVertical: TextAlignVertical.center,
                         decoration: InputDecoration(
                           hintText: 'https://api.example.com/v1/resource',
                           enabledBorder: OutlineInputBorder(
@@ -271,8 +270,11 @@ class _ResizablePanelsState extends State<_ResizablePanels> {
               behavior: HitTestBehavior.translucent,
               onVerticalDragUpdate: (details) {
                 setState(() {
-                  _topHeightFactor += details.delta.dy / constraints.maxHeight;
-                  _topHeightFactor = _topHeightFactor.clamp(0.2, 0.8);
+                  double newHeight = (constraints.maxHeight * _topHeightFactor) + details.delta.dy;
+                  // Enforce minimum height of 150px for top and 100px for bottom
+                  if (newHeight >= 150 && newHeight <= constraints.maxHeight - 100) {
+                    _topHeightFactor = newHeight / constraints.maxHeight;
+                  }
                 });
               },
               child: MouseRegion(
