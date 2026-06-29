@@ -7,6 +7,7 @@ import 'models/request_model.dart';
 import 'widgets/request_panel.dart';
 import 'widgets/response_panel.dart';
 import 'bootstrap_theme.dart';
+import 'widgets/sidebar.dart';
 
 void main() {
   runApp(
@@ -46,15 +47,15 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   final TextEditingController _urlController = TextEditingController();
+  double _sidebarWidth = 260.0;
+  bool _sidebarCollapsed = false;
 
   @override
   void initState() {
     super.initState();
-    // Sync controller with provider
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final restProvider = context.read<RestProvider>();
       _urlController.text = restProvider.request.url;
-      
       restProvider.addListener(_onRestProviderChanged);
     });
   }
@@ -84,156 +85,187 @@ class _MainScreenState extends State<MainScreen> {
         const SingleActivator(LogicalKeyboardKey.enter, meta: true): () => restProvider.sendRequest(),
       },
       child: Scaffold(
-        body: Column(
+        body: Row(
           children: [
-            // Top Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+            Sidebar(
+              width: _sidebarCollapsed ? 48.0 : _sidebarWidth,
+              isCollapsed: _sidebarCollapsed,
+              onToggle: () => setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+            ),
+            if (!_sidebarCollapsed)
+              GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    double newWidth = _sidebarWidth + details.delta.dx;
+                    if (newWidth >= 150 && newWidth <= 500) {
+                      _sidebarWidth = newWidth;
+                    }
+                  });
+                },
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeLeftRight,
+                  child: Container(
+                    width: 4,
+                    color: Colors.transparent,
+                    height: double.infinity,
+                  ),
+                ),
+              ),
+            Expanded(
+              child: Column(
                 children: [
-                  Container(
-                    height: 44,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.light ? const Color(0xFFF1F5F9) : const Color(0xFF2D2D2D),
-                      border: Border.all(color: Theme.of(context).inputDecorationTheme.enabledBorder!.borderSide.color),
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(6),
-                        bottomLeft: Radius.circular(6),
-                      ),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<HttpMethod>(
-                        value: restProvider.request.method,
-                        onChanged: (val) => restProvider.updateMethod(val!),
-                        isDense: true,
-                        style: TextStyle(
-                          color: restProvider.request.method.color,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                        items: HttpMethod.values.map((m) {
-                          return DropdownMenuItem(
-                            value: m, 
-                            child: Text(
-                              m.name,
-                              style: TextStyle(color: m.color),
+                  // Top Bar
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          height: 44,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).brightness == Brightness.light ? const Color(0xFFF1F5F9) : const Color(0xFF2D2D2D),
+                            border: Border.all(color: Theme.of(context).inputDecorationTheme.enabledBorder!.borderSide.color),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(6),
+                              bottomLeft: Radius.circular(6),
                             ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: SizedBox(
-                      height: 44,
-                      child: TextField(
-                        controller: _urlController,
-                        style: const TextStyle(fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: 'https://api.example.com/v1/resource',
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.zero,
-                            borderSide: BorderSide(color: Theme.of(context).inputDecorationTheme.enabledBorder!.borderSide.color),
                           ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.zero,
-                            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
-                          ),
-                        ),
-                        onChanged: (val) => restProvider.updateUrl(val),
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    height: 44,
-                    child: ElevatedButton(
-                      onPressed: restProvider.isLoading ? null : () => restProvider.sendRequest(),
-                      style: ElevatedButton.styleFrom(
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.only(
-                            topRight: Radius.circular(6),
-                            bottomRight: Radius.circular(6),
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                      ),
-                      child: restProvider.isLoading 
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('SEND', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0, fontSize: 13)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.code, size: 20),
-                    onPressed: () {
-                      final curl = restProvider.generateCurl();
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('cURL Preview'),
-                          content: Container(
-                            width: 600,
-                            constraints: const BoxConstraints(maxHeight: 400),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).brightness == Brightness.dark 
-                                  ? const Color(0xFF1E1E1E) 
-                                  : const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
-                            ),
-                            child: SingleChildScrollView(
-                              child: SelectableText(
-                                curl,
-                                style: const TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 12,
-                                  height: 1.4,
-                                ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<HttpMethod>(
+                              value: restProvider.request.method,
+                              onChanged: (val) => restProvider.updateMethod(val!),
+                              isDense: true,
+                              style: TextStyle(
+                                color: restProvider.request.method.color,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
                               ),
-                            ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('CLOSE'),
-                            ),
-                            ElevatedButton(
-                              onPressed: () {
-                                Clipboard.setData(ClipboardData(text: curl));
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('cURL copied to clipboard'),
-                                    behavior: SnackBarBehavior.floating,
-                                    width: 250,
+                              items: HttpMethod.values.map((m) {
+                                return DropdownMenuItem(
+                                  value: m, 
+                                  child: Text(
+                                    m.name,
+                                    style: TextStyle(color: m.color),
                                   ),
                                 );
-                              },
-                              child: const Text('COPY'),
+                              }).toList(),
                             ),
-                          ],
+                          ),
                         ),
-                      );
-                    },
-                    tooltip: 'Preview & Copy as cURL',
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: TextField(
+                              controller: _urlController,
+                              style: const TextStyle(fontSize: 13),
+                              decoration: InputDecoration(
+                                hintText: 'https://api.example.com/v1/resource',
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  borderSide: BorderSide(color: Theme.of(context).inputDecorationTheme.enabledBorder!.borderSide.color),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
+                                ),
+                              ),
+                              onChanged: (val) => restProvider.updateUrl(val),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          height: 44,
+                          child: ElevatedButton(
+                            onPressed: restProvider.isLoading ? null : () => restProvider.sendRequest(),
+                            style: ElevatedButton.styleFrom(
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.only(
+                                  topRight: Radius.circular(6),
+                                  bottomRight: Radius.circular(6),
+                                ),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                            ),
+                            child: restProvider.isLoading 
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Text('SEND', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0, fontSize: 13)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.code, size: 20),
+                          onPressed: () {
+                            final curl = restProvider.generateCurl();
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('cURL Preview'),
+                                content: Container(
+                                  width: 600,
+                                  constraints: const BoxConstraints(maxHeight: 400),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).brightness == Brightness.dark 
+                                        ? const Color(0xFF1E1E1E) 
+                                        : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                                  ),
+                                  child: SingleChildScrollView(
+                                    child: SelectableText(
+                                      curl,
+                                      style: const TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 12,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('CLOSE'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      Clipboard.setData(ClipboardData(text: curl));
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('cURL copied to clipboard'),
+                                          behavior: SnackBarBehavior.floating,
+                                          width: 250,
+                                        ),
+                                      );
+                                    },
+                                    child: const Text('COPY'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          tooltip: 'Preview & Copy as cURL',
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: Icon(themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode, size: 20),
+                          onPressed: () => themeProvider.toggleTheme(),
+                          tooltip: 'Toggle Theme',
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: Icon(themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode, size: 20),
-                    onPressed: () => themeProvider.toggleTheme(),
-                    tooltip: 'Toggle Theme',
+                  // Resizable Panels
+                  Expanded(
+                    child: _ResizablePanels(
+                      topPanel: const RequestPanel(),
+                      bottomPanel: const ResponsePanel(),
+                    ),
                   ),
                 ],
-              ),
-            ),
-            // Resizable Panels
-            Expanded(
-              child: _ResizablePanels(
-                topPanel: const RequestPanel(),
-                bottomPanel: const ResponsePanel(),
               ),
             ),
           ],
@@ -303,26 +335,5 @@ class _ResizablePanelsState extends State<_ResizablePanels> {
         );
       },
     );
-  }
-}
-
-extension HttpMethodColor on HttpMethod {
-  Color get color {
-    switch (this) {
-      case HttpMethod.GET:
-        return Colors.green;
-      case HttpMethod.POST:
-        return Colors.amber[700]!;
-      case HttpMethod.PUT:
-        return Colors.blue;
-      case HttpMethod.PATCH:
-        return Colors.purple;
-      case HttpMethod.DELETE:
-        return Colors.red;
-      case HttpMethod.HEAD:
-        return Colors.green;
-      case HttpMethod.OPTIONS:
-        return const Color(0xFFFF00FF);
-    }
   }
 }

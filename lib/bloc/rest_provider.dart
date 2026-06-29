@@ -1,14 +1,64 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/request_model.dart';
 import '../models/response_model.dart';
+import '../models/history_model.dart';
 
 class RestProvider extends ChangeNotifier {
   final Dio _dio = Dio();
   RequestModel request = RequestModel();
   ResponseModel? response;
   bool isLoading = false;
+  List<HistoryItem> history = [];
+
+  RestProvider() {
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final historyJson = prefs.getStringList('request_history') ?? [];
+    history = historyJson
+        .map((item) => HistoryItem.fromJson(jsonDecode(item)))
+        .toList();
+    notifyListeners();
+  }
+
+  Future<void> _saveHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final historyJson = history
+        .map((item) => jsonEncode(item.toJson()))
+        .toList();
+    await prefs.setStringList('request_history', historyJson);
+  }
+
+  void addToHistory(RequestModel req, int? statusCode) {
+    final item = HistoryItem(
+      request: req.copy(),
+      timestamp: DateTime.now(),
+      statusCode: statusCode,
+    );
+    history.insert(0, item);
+    if (history.length > 50) {
+      history = history.sublist(0, 50);
+    }
+    _saveHistory();
+    notifyListeners();
+  }
+
+  void loadFromHistory(HistoryItem item) {
+    request = item.request.copy();
+    response = null; // Clear response when loading new request
+    notifyListeners();
+  }
+
+  void clearHistory() {
+    history.clear();
+    _saveHistory();
+    notifyListeners();
+  }
 
   void updateMethod(HttpMethod method) {
     request.method = method;
@@ -330,12 +380,14 @@ class RestProvider extends ChangeNotifier {
         size: res.data.toString().length,
         requestSize: reqSize,
       );
+      addToHistory(request, res.statusCode);
     } catch (e) {
       response = ResponseModel(
         statusCode: 0,
         statusMessage: e.toString(),
         data: e.toString(),
       );
+      addToHistory(request, 0);
     } finally {
       isLoading = false;
       notifyListeners();
