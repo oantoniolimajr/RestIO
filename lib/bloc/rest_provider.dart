@@ -2,27 +2,40 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import '../models/request_model.dart';
 import '../models/response_model.dart';
 import '../models/history_model.dart';
+import '../models/collection_model.dart';
 
 class RestProvider extends ChangeNotifier {
   final Dio _dio = Dio();
+  final _uuid = const Uuid();
   RequestModel request = RequestModel();
   ResponseModel? response;
   bool isLoading = false;
   List<HistoryItem> history = [];
+  List<CollectionModel> collections = [];
 
   RestProvider() {
-    _loadHistory();
+    _loadData();
   }
 
-  Future<void> _loadHistory() async {
+  Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
+    
+    // Load History
     final historyJson = prefs.getStringList('request_history') ?? [];
     history = historyJson
         .map((item) => HistoryItem.fromJson(jsonDecode(item)))
         .toList();
+
+    // Load Collections
+    final collectionsJson = prefs.getStringList('request_collections') ?? [];
+    collections = collectionsJson
+        .map((item) => CollectionModel.fromJson(jsonDecode(item)))
+        .toList();
+
     notifyListeners();
   }
 
@@ -32,6 +45,74 @@ class RestProvider extends ChangeNotifier {
         .map((item) => jsonEncode(item.toJson()))
         .toList();
     await prefs.setStringList('request_history', historyJson);
+  }
+
+  Future<void> _saveCollections() async {
+    final prefs = await SharedPreferences.getInstance();
+    final collectionsJson = collections
+        .map((item) => jsonEncode(item.toJson()))
+        .toList();
+    await prefs.setStringList('request_collections', collectionsJson);
+  }
+
+  void createCollection(String name) {
+    collections.add(CollectionModel(id: _uuid.v4(), name: name, requests: []));
+    _saveCollections();
+    notifyListeners();
+  }
+
+  void deleteCollection(String id) {
+    collections.removeWhere((c) => c.id == id);
+    _saveCollections();
+    notifyListeners();
+  }
+
+  void renameCollection(String id, String newName) {
+    final index = collections.indexWhere((c) => c.id == id);
+    if (index != -1) {
+      collections[index].name = newName;
+      _saveCollections();
+      notifyListeners();
+    }
+  }
+
+  void saveRequestToCollection(String collectionId, String name, RequestModel req) {
+    final index = collections.indexWhere((c) => c.id == collectionId);
+    if (index != -1) {
+      final updatedCollection = collections[index];
+      updatedCollection.requests.add(SavedRequestModel(
+        id: _uuid.v4(),
+        name: name,
+        request: req.copy(),
+      ));
+      
+      // Update the list reference to be safe
+      collections[index] = updatedCollection;
+
+      _saveCollections();
+      notifyListeners();
+    }
+  }
+
+  void renameRequestInCollection(String collectionId, String requestId, String newName) {
+    final cIndex = collections.indexWhere((c) => c.id == collectionId);
+    if (cIndex != -1) {
+      final rIndex = collections[cIndex].requests.indexWhere((r) => r.id == requestId);
+      if (rIndex != -1) {
+        collections[cIndex].requests[rIndex].name = newName;
+        _saveCollections();
+        notifyListeners();
+      }
+    }
+  }
+
+  void deleteRequestFromCollection(String collectionId, String requestId) {
+    final index = collections.indexWhere((c) => c.id == collectionId);
+    if (index != -1) {
+      collections[index].requests.removeWhere((r) => r.id == requestId);
+      _saveCollections();
+      notifyListeners();
+    }
   }
 
   void addToHistory(RequestModel req, int? statusCode) {

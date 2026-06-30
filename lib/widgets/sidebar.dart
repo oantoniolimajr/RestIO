@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../bloc/rest_provider.dart';
 import '../models/history_model.dart';
+import '../models/collection_model.dart';
 import '../models/request_model.dart';
 
-class Sidebar extends StatelessWidget {
+class Sidebar extends StatefulWidget {
   final double width;
   final bool isCollapsed;
   final VoidCallback onToggle;
@@ -17,100 +18,159 @@ class Sidebar extends StatelessWidget {
   });
 
   @override
+  State<Sidebar> createState() => _SidebarState();
+}
+
+class _SidebarState extends State<Sidebar> {
+  int _activeTab = 0; // 0 for History, 1 for Collections
+
+  @override
   Widget build(BuildContext context) {
     final restProvider = context.watch<RestProvider>();
-    final history = restProvider.history;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF1F5F9);
 
-    if (isCollapsed) {
-      return Container(
-        width: width,
-        decoration: BoxDecoration(
-          color: bgColor,
-          border: Border(right: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1))),
+    return Material(
+      color: bgColor,
+      child: Container(
+        width: widget.width,
+        child: widget.isCollapsed 
+          ? _buildCollapsedContent(context)
+          : _buildExpandedContent(context, restProvider, bgColor),
+      ),
+    );
+  }
+
+  Widget _buildCollapsedContent(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    return Column(
+      children: [
+        const SizedBox(height: 12),
+        IconButton(
+          icon: const Icon(Icons.menu_open, size: 20),
+          onPressed: widget.onToggle,
+          tooltip: 'Expand Sidebar',
         ),
-        child: Column(
+        const SizedBox(height: 12),
+        IconButton(
+          icon: Icon(Icons.history, color: _activeTab == 0 ? primaryColor : Colors.grey, size: 20),
+          onPressed: () {
+            setState(() => _activeTab = 0);
+            widget.onToggle();
+          },
+        ),
+        IconButton(
+          icon: Icon(Icons.folder_outlined, color: _activeTab == 1 ? primaryColor : Colors.grey, size: 20),
+          onPressed: () {
+            setState(() => _activeTab = 1);
+            widget.onToggle();
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExpandedContent(BuildContext context, RestProvider restProvider, Color bgColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Sidebar Header & Tab Toggle
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SizedBox(width: 8),
+              Expanded(
+                child: Row(
+                  children: [
+                    _buildTabButton(0, 'History', Icons.history),
+                    const SizedBox(width: 4),
+                    _buildTabButton(1, 'Collections', Icons.folder_outlined),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.menu, size: 18),
+                onPressed: widget.onToggle,
+                tooltip: 'Collapse Sidebar',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 1),
+        Expanded(
+          child: _activeTab == 0 
+            ? _HistoryView(restProvider: restProvider)
+            : _CollectionsView(restProvider: restProvider),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabButton(int index, String label, IconData icon) {
+    final isActive = _activeTab == index;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return InkWell(
+      onTap: () => setState(() => _activeTab = index),
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? primaryColor.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 12),
-            IconButton(
-              icon: const Icon(Icons.menu_open, size: 20),
-              onPressed: onToggle,
-              tooltip: 'Expand Sidebar',
+            Icon(icon, size: 14, color: isActive ? primaryColor : Colors.grey),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11, 
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                color: isActive ? primaryColor : Colors.grey,
+              ),
             ),
-            const SizedBox(height: 12),
-            const Icon(Icons.history, size: 20, color: Colors.grey),
           ],
         ),
-      );
-    }
-
-    return Container(
-      width: width,
-      decoration: BoxDecoration(
-        color: bgColor,
-        border: Border(right: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1))),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.history, size: 18, color: Colors.grey),
-                    SizedBox(width: 8),
-                    Text(
-                      'HISTORY',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    if (history.isNotEmpty)
-                      IconButton(
-                        icon: const Icon(Icons.delete_sweep_outlined, size: 18, color: Colors.grey),
-                        onPressed: () => _confirmClear(context, restProvider),
-                        tooltip: 'Clear History',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.menu, size: 18),
-                      onPressed: onToggle,
-                      tooltip: 'Collapse Sidebar',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-              ],
+    );
+  }
+}
+
+class _HistoryView extends StatelessWidget {
+  final RestProvider restProvider;
+  const _HistoryView({required this.restProvider});
+
+  @override
+  Widget build(BuildContext context) {
+    final history = restProvider.history;
+    if (history.isEmpty) {
+      return const Center(child: Text('No history yet', style: TextStyle(color: Colors.grey, fontSize: 12)));
+    }
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => _confirmClear(context, restProvider),
+              icon: const Icon(Icons.delete_sweep_outlined, size: 14),
+              label: const Text('Clear', style: TextStyle(fontSize: 11)),
             ),
           ),
-          const Divider(height: 1),
-          Expanded(
-            child: history.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No history yet',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: history.length,
-                    itemBuilder: (context, index) {
-                      final item = history[index];
-                      return _HistoryTile(item: item, restProvider: restProvider);
-                    },
-                  ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: history.length,
+            itemBuilder: (context, index) => _HistoryTile(item: history[index], restProvider: restProvider),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -135,6 +195,124 @@ class Sidebar extends StatelessWidget {
   }
 }
 
+class _CollectionsView extends StatelessWidget {
+  final RestProvider restProvider;
+  const _CollectionsView({required this.restProvider});
+
+  @override
+  Widget build(BuildContext context) {
+    final collections = restProvider.collections;
+    if (collections.isEmpty) {
+      return const Center(child: Text('No collections yet', style: TextStyle(color: Colors.grey, fontSize: 12)));
+    }
+    return ListView.builder(
+      itemCount: collections.length,
+      itemBuilder: (context, index) {
+        final col = collections[index];
+        return Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            shape: const Border(),
+            collapsedShape: const Border(),
+            title: Text(col.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            leading: const Icon(Icons.folder, size: 18, color: Colors.amber),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  onPressed: () => _showRenameDialog(context, col.id, col.name, true),
+                  tooltip: 'Rename Collection',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  onPressed: () => _confirmDelete(context, col.name, () => restProvider.deleteCollection(col.id), true),
+                  tooltip: 'Delete Collection',
+                ),
+              ],
+            ),
+            children: col.requests.map((req) => ListTile(
+              dense: true,
+              title: Text(req.name, style: const TextStyle(fontSize: 12)),
+              subtitle: Text(req.request.method.name, style: TextStyle(color: req.request.method.color, fontSize: 10, fontWeight: FontWeight.bold)),
+              onTap: () {
+                restProvider.request = req.request.copy();
+                restProvider.refresh();
+              },
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 14),
+                    onPressed: () => _showRenameDialog(context, col.id, req.name, false, requestId: req.id),
+                    tooltip: 'Rename Request',
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 14),
+                    onPressed: () => _confirmDelete(context, req.name, () => restProvider.deleteRequestFromCollection(col.id, req.id), false),
+                    tooltip: 'Delete Request',
+                  ),
+                ],
+              ),
+            )).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  void _confirmDelete(BuildContext context, String name, VoidCallback onConfirm, bool isCollection) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isCollection ? 'Delete Collection?' : 'Delete Request?'),
+        content: Text('Are you sure you want to delete "$name"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () {
+              onConfirm();
+              Navigator.pop(context);
+            },
+            child: const Text('DELETE', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRenameDialog(BuildContext context, String collectionId, String currentName, bool isCollection, {String? requestId}) {
+    final controller = TextEditingController(text: currentName);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isCollection ? 'Rename Collection' : 'Rename Request'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(hintText: isCollection ? 'Collection Name' : 'Request Name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                if (isCollection) {
+                  restProvider.renameCollection(collectionId, controller.text);
+                } else {
+                  restProvider.renameRequestInCollection(collectionId, requestId!, controller.text);
+                }
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('RENAME'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HistoryTile extends StatelessWidget {
   final HistoryItem item;
   final RestProvider restProvider;
@@ -146,50 +324,50 @@ class _HistoryTile extends StatelessWidget {
     final method = item.request.method;
     final url = item.request.url.isEmpty ? '(No URL)' : item.request.url;
     
-    return InkWell(
-      onTap: () => restProvider.loadFromHistory(item),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.05))),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  method.name,
-                  style: TextStyle(
-                    color: method.color,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 10,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (item.statusCode != null)
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => restProvider.loadFromHistory(item),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
                   Text(
-                    '${item.statusCode}',
+                    method.name,
                     style: TextStyle(
-                      color: item.statusCode! >= 200 && item.statusCode! < 300 ? Colors.green : Colors.red,
+                      color: method.color,
+                      fontWeight: FontWeight.bold,
                       fontSize: 10,
                     ),
                   ),
-                const Spacer(),
-                Text(
-                  _formatTime(item.timestamp),
-                  style: const TextStyle(fontSize: 9, color: Colors.grey),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              url,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ],
+                  const SizedBox(width: 8),
+                  if (item.statusCode != null)
+                    Text(
+                      '${item.statusCode}',
+                      style: TextStyle(
+                        color: item.statusCode! >= 200 && item.statusCode! < 300 ? Colors.green : Colors.red,
+                        fontSize: 10,
+                      ),
+                    ),
+                  const Spacer(),
+                  Text(
+                    _formatTime(item.timestamp),
+                    style: const TextStyle(fontSize: 9, color: Colors.grey),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                url,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
         ),
       ),
     );

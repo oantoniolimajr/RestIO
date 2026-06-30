@@ -74,6 +74,132 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  void _showSaveDialog(BuildContext context, RestProvider provider) {
+    final nameController = TextEditingController(text: provider.request.url.split('/').last);
+    String? selectedCollectionId;
+
+    // Pre-select first collection if exists
+    if (provider.collections.isNotEmpty) {
+      selectedCollectionId = provider.collections.first.id;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Save Request'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(hintText: 'e.g. Get User Invoices'),
+                  onChanged: (_) => setDialogState(() {}), // Refresh Save button state
+                ),
+                const SizedBox(height: 16),
+                const Text('Collection', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const SizedBox(height: 4),
+                if (provider.collections.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                    ),
+                    child: const Text(
+                      'No collections found. Create one below to save.',
+                      style: TextStyle(fontSize: 12, color: Colors.amber),
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).inputDecorationTheme.fillColor,
+                      border: Border.all(color: Theme.of(context).inputDecorationTheme.enabledBorder!.borderSide.color),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: selectedCollectionId,
+                        style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface),
+                        onChanged: (val) => setDialogState(() => selectedCollectionId = val),
+                        items: provider.collections.map((c) {
+                          return DropdownMenuItem(value: c.id, child: Text(c.name));
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () {
+                    final newColController = TextEditingController();
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('New Collection'),
+                        content: TextField(
+                          controller: newColController,
+                          autofocus: true,
+                          decoration: const InputDecoration(hintText: 'Collection Name'),
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+                          ElevatedButton(
+                            onPressed: () {
+                              if (newColController.text.isNotEmpty) {
+                                provider.createCollection(newColController.text);
+                                final newId = provider.collections.last.id;
+                                Navigator.pop(context);
+                                setDialogState(() {
+                                  selectedCollectionId = newId;
+                                });
+                              }
+                            },
+                            child: const Text('CREATE'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Create New Collection', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+            ElevatedButton(
+              onPressed: (selectedCollectionId == null || nameController.text.trim().isEmpty) 
+                ? null 
+                : () {
+                    provider.saveRequestToCollection(selectedCollectionId!, nameController.text.trim(), provider.request);
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Saved to collection'), 
+                        behavior: SnackBarBehavior.floating, 
+                        width: 250,
+                      )
+                    );
+                  },
+              child: const Text('SAVE'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final restProvider = context.watch<RestProvider>();
@@ -182,8 +308,8 @@ class _MainScreenState extends State<MainScreen> {
                             style: ElevatedButton.styleFrom(
                               shape: const RoundedRectangleBorder(
                                 borderRadius: BorderRadius.only(
-                                  topRight: Radius.circular(6),
-                                  bottomRight: Radius.circular(6),
+                                  topRight: Radius.circular(0),
+                                  bottomRight: Radius.circular(0),
                                 ),
                               ),
                               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -191,6 +317,23 @@ class _MainScreenState extends State<MainScreen> {
                             child: restProvider.isLoading 
                               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                               : const Text('SEND', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0, fontSize: 13)),
+                          ),
+                        ),
+                        SizedBox(
+                          height: 44,
+                          child: ElevatedButton(
+                            onPressed: () => _showSaveDialog(context, restProvider),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue[700],
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.only(
+                                  topRight: Radius.circular(6),
+                                  bottomRight: Radius.circular(6),
+                                ),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                            ),
+                            child: const Icon(Icons.bookmark_add_outlined, size: 18, color: Colors.white),
                           ),
                         ),
                         const SizedBox(width: 8),

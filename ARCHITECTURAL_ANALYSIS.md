@@ -9,67 +9,70 @@
 ## 🏗️ 1. Technical Evaluation
 
 ### Architecture
-*   **Current State:** The project uses a simplified BLoC/Provider pattern. Logic is concentrated in `RestProvider` (`ChangeNotifier`).
-*   **Assessment:** Good for an MVP, but `RestProvider` is becoming a **God Object**. It currently handles networking, state, cURL parsing/generation, and file logging.
-*   **Recommendation:** Transition to a **Layered Architecture (Clean Architecture Lite)**:
-    *   **Data Layer:** Move `Dio` logic to a `NetworkingRepository`.
-    *   **Domain Layer:** Create specialized `Services`: `CurlService` (for import/export), `JsonFormatterService`.
-    *   **Presentation Layer:** Keep Providers focused only on UI state management.
+*   **Current State:** The project follows a reactive pattern using `Provider`. Recently expanded with robust modules for **History Management** and **Hierarchical Collections**.
+*   **Assessment:** The core logic in `RestProvider` is becoming extensive. It now manages networking, cURL parsing/formatting, and persistent storage synchronization for both history and collections.
+*   **Recommendation:** Prioritize **Service Decoupling**:
+    *   **StorageService:** Abstract the `SharedPreferences` logic to handle different data types (History, Collections, Environments).
+    *   **ImportExportService:** Separate the cURL logic into a standalone utility to facilitate unit testing.
+    *   **State Refactoring:** Consider `flutter_bloc` for the complex state transitions required by future "Environment" and "Chaining" features.
 
 ### Resilience
-*   **Current State:** Basic `try-catch` blocks around the main request.
-*   **Assessment:** Vulnerable to specific network failures (timeouts, DNS issues, socket hangs).
+*   **Current State:** Implements basic error handling and input validation for cURL imports.
+*   **Assessment:** The application is stable for standard use cases but lacks advanced networking failovers.
 *   **Recommendation:**
-    *   **Dio Interceptors:** Implement interceptors for global error handling and logging.
-    *   **Retry Mechanism:** Add an exponential backoff retry policy for transient errors (e.g., 503 Service Unavailable).
-    *   **Connectivity Monitoring:** Use `connectivity_plus` to warn the user when the internet is down *before* they hit Send.
+    *   **Dio Interceptors:** Essential for injecting dynamic authentication tokens and logging.
+    *   **Timeout Management:** Implementation of per-request custom timeouts.
+    *   **Offline Mode:** Improved UI feedback when connectivity is lost.
 
 ### Maintainability
-*   **Current State:** Centralized theme and models.
-*   **Assessment:** High readability. However, hardcoded strings for Auth types ("Bearer Token") should be enums to prevent bugs.
+*   **Current State:** Good use of custom models and a centralized `BootstrapTheme`.
+*   **Assessment:** High maintainability due to standard Dart patterns. The recursion in `JsonViewer` is clean but needs careful auditing as new JSON types are supported.
 *   **Recommendation:** 
-    *   **Enums with Extensions:** Replace string-based logic with rich enums (e.g., `AuthType.bearer.label`).
-    *   **Strong Typing:** Use `json_serializable` for models to ensure data integrity during evolution.
+    *   **Data Integrity:** Use `json_serializable` to automate the `toJson/fromJson` boilerplate introduced in recent releases.
+    *   **Strong Typing:** Transition from `Map<String, String>` to dedicated `EnvironmentVariable` objects to support masking and scope.
 
 ### Performance
-*   **Current State:** Custom `JsonViewer` with manual line generation.
-*   **Assessment:** Optimized for medium payloads. For multi-megabyte JSONs, building the entire line list in every `notifyListeners()` will cause frame drops.
+*   **Current State:** Custom `JsonViewer` with interactive folding and search.
+*   **Assessment:** Excellent responsiveness for average payloads. The newly added "Word Wrap" and "Search" mechanisms are CPU-intensive on the UI thread for very large files.
 *   **Recommendation:**
-    *   **Virtualization:** Use `ListView.builder` inside the `JsonViewer` more aggressively to ensure only visible lines are in the widget tree.
-    *   **Isolates:** Move heavy JSON parsing (`jsonDecode` and `_generateLines`) to a background `Isolate` to keep the UI thread buttery smooth.
+    *   **Isolates:** Use `compute()` for formatting and searching large JSON strings (>1MB).
+    *   **Virtual Gutter:** Optimize the line-number rendering to only calculate indices for the visible viewport.
 
 ---
 
 ## 🛠️ 2. Developer Velocity (Suggested Features)
 
-As a developer using this tool daily, these features would provide the biggest "quality of life" improvements:
+With History and Collections now implemented, these are the next priority features to accelerate development workflows:
 
-### ⏱️ Request History
-*   **Feature:** A sidebar or drawer containing the last 50 requests.
-*   **Impact:** Saves time re-typing URLs or headers when testing across different sessions.
+### 🌐 Environment Management
+*   **Feature:** Create variables (e.g., `{{baseUrl}}`, `{{apiKey}}`) grouped by environments (Dev, Staging, Prod).
+*   **Impact:** Zero manual URL/Header editing when switching between local and cloud servers.
 
-### 🌐 Environment Variables
-*   **Feature:** Define "Prod", "Staging", or "Local" environments with variables like `{{baseUrl}}` or `{{token}}`.
-*   **Impact:** Eliminates the need to manually update URLs and Auth headers when switching targets.
+### 📥 Import/Export System
+*   **Feature:** Export collections to standard JSON files and support importing Postman/Insomnia collections.
+*   **Impact:** Enables team collaboration and easy migration from other tools.
 
-### 📁 Collections & Folders
-*   **Feature:** Ability to save requests into named folders (e.g., "Auth API", "Invoice Service").
-*   **Impact:** Essential for large-scale projects where teams share specific API flows.
+### 🧪 Response Assertions (Tests)
+*   **Feature:** Simple UI to add assertions like `Status is 200` or `Body contains 'id'`.
+*   **Impact:** Automatically validates API contracts during manual testing.
 
-### 📝 Scripting & Pre-request logic
-*   **Feature:** Basic JS/Dart scripts to run before a request (e.g., generate a dynamic timestamp or UUID).
-*   **Impact:** Automates testing of APIs that require dynamic nonces or complex signing.
+### 🔗 Request Chaining
+*   **Feature:** Extract a value from a response (e.g., an `access_token`) and automatically inject it into subsequent requests.
+*   **Impact:** Automates complex login/action flows.
 
-### 🔌 WebSocket & gRPC Support
-*   **Feature:** Expand beyond REST to support real-time protocols.
-*   **Impact:** Makes RestIO a "swiss army knife" for modern microservices architectures.
+### 📊 GraphQL Support
+*   **Feature:** A specialized editor for GraphQL queries with schema introspection.
+*   **Impact:** Expands the tool's utility to modern data-driven architectures.
+
+### 🍪 Cookie Manager
+*   **Feature:** Dedicated view to inspect, manually edit, or clear cookies persisted across sessions.
+*   **Impact:** Crucial for testing stateful applications and session-based auth.
 
 ---
 
 ## 📈 3. Immediate Best Practices Actions
-1.  **Linter Optimization:** Enable `flutter_lints` with stricter rules in `analysis_options.yaml`.
-2.  **Unit Testing:** Implement tests for the `CurlService` to ensure complex cURL strings (with escaped quotes and newlines) always import correctly.
-3.  **Dependency Injection:** Consider using `GetIt` alongside `Provider` for better service decoupling.
+1.  **Unit Tests for Core Logic:** Build a test suite for `cURL` importing/exporting and `JSON` path extraction.
+2.  **Dependency Injection:** Introduce `GetIt` to manage services like `Storage` and `Networking` independently of the UI tree.
 
 ---
-*This analysis aims to transform RestIO from a specialized tool into a standard-setting utility for the Flutter ecosystem.*
+*This roadmap ensures RestIO continues to evolve as a professional-grade tool for the modern developer.*
