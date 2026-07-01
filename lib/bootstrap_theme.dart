@@ -7,7 +7,7 @@ class BootstrapTheme {
   static const Color success = Color(0xFF10B981);
   static const Color danger = Color(0xFFEF4444);
   
-  // Dark mode colors - Re-refined for better harmony and less "pitch black"
+  // Dark mode colors
   static const Color darkBg = Color(0xFF212121); 
   static const Color darkSurface = Color(0xFF2D2D2D);
   static const Color darkBorder = Color(0xFF424242);

@@ -4,6 +4,21 @@ enum HttpMethod { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS }
 
 enum BodyType { none, formData, xWwwFormUrlEncoded, raw }
 
+extension BodyTypeLabel on BodyType {
+  String get label {
+    switch (this) {
+      case BodyType.none:
+        return 'none';
+      case BodyType.formData:
+        return 'form-data';
+      case BodyType.xWwwFormUrlEncoded:
+        return 'x-www-form-urlencoded';
+      case BodyType.raw:
+        return 'raw';
+    }
+  }
+}
+
 enum RawType { text, javascript, json, html, xml }
 
 class KeyValue {

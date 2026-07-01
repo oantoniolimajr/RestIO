@@ -170,13 +170,13 @@ class _MainScreenState extends State<MainScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
                     ),
-                    child: const Text(
+                    child: Text(
                       'No collections found. Create one below to save.',
-                      style: TextStyle(fontSize: 12, color: Colors.amber),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary),
                     ),
                   )
                 else
@@ -349,11 +349,11 @@ class _MainScreenState extends State<MainScreen> {
                           height: 44,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).brightness == Brightness.light ? const Color(0xFFF1F5F9) : const Color(0xFF2D2D2D),
-                            border: Border.all(color: Theme.of(context).inputDecorationTheme.enabledBorder!.borderSide.color),
+                            color: Theme.of(context).brightness == Brightness.light ? const Color(0xFFF1F5F9) : Theme.of(context).colorScheme.surface,
+                            border: Border.all(color: Theme.of(context).dividerColor),
                             borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(6),
-                              bottomLeft: Radius.circular(6),
+                              topLeft: Radius.circular(8),
+                              bottomLeft: Radius.circular(8),
                             ),
                           ),
                           child: DropdownButtonHideUnderline(
@@ -384,11 +384,18 @@ class _MainScreenState extends State<MainScreen> {
                             child: TextField(
                               controller: _urlController,
                               style: const TextStyle(fontSize: 13),
+                              textAlignVertical: TextAlignVertical.center,
+                              expands: true,
+                              maxLines: null,
+                              minLines: null,
                               decoration: InputDecoration(
                                 hintText: 'https://api.example.com/v1/resource',
+                                filled: true,
+                                fillColor: Theme.of(context).brightness == Brightness.light ? Colors.white : Theme.of(context).colorScheme.surface,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.zero,
-                                  borderSide: BorderSide(color: Theme.of(context).inputDecorationTheme.enabledBorder!.borderSide.color),
+                                  borderSide: BorderSide(color: Theme.of(context).dividerColor),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.zero,
@@ -435,11 +442,11 @@ class _MainScreenState extends State<MainScreen> {
                               }
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[700],
+                              backgroundColor: Theme.of(context).colorScheme.primary,
                               shape: const RoundedRectangleBorder(
                                 borderRadius: BorderRadius.only(
-                                  topRight: Radius.circular(6),
-                                  bottomRight: Radius.circular(6),
+                                  topRight: Radius.circular(8),
+                                  bottomRight: Radius.circular(8),
                                 ),
                               ),
                               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -483,12 +490,10 @@ class _MainScreenState extends State<MainScreen> {
                                       constraints: const BoxConstraints(maxHeight: 400),
                                       padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
-                                        color: Theme.of(context).brightness == Brightness.dark 
-                                            ? const Color(0xFF1E1E1E) 
-                                            : const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
-                                      ),
+                                      color: Theme.of(context).scaffoldBackgroundColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Theme.of(context).dividerColor),
+                                    ),
                                       child: SingleChildScrollView(
                                         child: SelectableText(
                                           curl,

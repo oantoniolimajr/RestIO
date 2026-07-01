@@ -401,7 +401,7 @@ class _BodyTabState extends State<_BodyTab> {
                           },
                         ),
                       ),
-                      Text(type.name, style: const TextStyle(fontSize: 12)),
+                      Text(type.label, style: const TextStyle(fontSize: 12)),
                     ],
                   ),
                 );
@@ -620,7 +620,7 @@ class _FormattedJson extends StatelessWidget {
           alignment: Alignment.topLeft,
           child: Text(
             'Invalid JSON: $e', 
-            style: const TextStyle(color: Colors.red, fontSize: 12, fontFamily: 'monospace')
+            style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12, fontFamily: 'monospace')
           ),
         ),
       );
@@ -693,9 +693,9 @@ class SearchToolbar extends StatelessWidget {
               ),
             ] else if (hasText && count == 0) ...[
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'No results',
-                style: TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.bold),
               ),
             ],
           ],

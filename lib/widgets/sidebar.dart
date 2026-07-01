@@ -119,8 +119,8 @@ class _SidebarState extends State<Sidebar> {
           child: Container(
             height: 32,
             decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF2D2D2D),
-              borderRadius: BorderRadius.circular(6),
+              color: Theme.of(context).brightness == Brightness.light ? Colors.white : Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
             ),
             child: TextField(
