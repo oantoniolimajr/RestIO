@@ -12,7 +12,7 @@ class KeyValue {
   String description;
   bool enabled;
 
-  KeyValue({this.key = '', this.value = '', this.description = '', this.enabled = true});
+  KeyValue({this.key = '', this.value = '', this.description = '', this.enabled = false});
 
   Map<String, dynamic> toJson() => {
     'key': key,

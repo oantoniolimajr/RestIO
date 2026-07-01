@@ -189,6 +189,9 @@ class _KeyValueRowState extends State<_KeyValueRow> {
                 decoration: const InputDecoration(hintText: 'Key'),
                 onChanged: (val) {
                   widget.kv.key = val;
+                  if (val.isNotEmpty && !widget.kv.enabled) {
+                    widget.kv.enabled = true;
+                  }
                   widget.onChanged();
                 },
               ),
@@ -204,6 +207,9 @@ class _KeyValueRowState extends State<_KeyValueRow> {
                 decoration: const InputDecoration(hintText: 'Value'),
                 onChanged: (val) {
                   widget.kv.value = val;
+                  if (val.isNotEmpty && !widget.kv.enabled) {
+                    widget.kv.enabled = true;
+                  }
                   widget.onChanged();
                 },
               ),

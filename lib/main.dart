@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'bloc/rest_provider.dart';
 import 'bloc/theme_provider.dart';
 import 'models/request_model.dart';
+import 'models/collection_model.dart';
 import 'widgets/request_panel.dart';
 import 'widgets/response_panel.dart';
 import 'bootstrap_theme.dart';
@@ -75,35 +76,95 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showSaveDialog(BuildContext context, RestProvider provider) {
-    final nameController = TextEditingController(text: provider.request.url.split('/').last);
-    String? selectedCollectionId;
+    final nameController = TextEditingController(text: provider.request.url);
+    String? selectedParentId;
 
-    // Pre-select first collection if exists
-    if (provider.collections.isNotEmpty) {
-      selectedCollectionId = provider.collections.first.id;
+    // Helper to flatten collections and folders for the dropdown
+    List<Map<String, dynamic>> parentItems = [];
+    
+    void addFolders(List<FolderModel> folders, int level) {
+      for (var folder in folders) {
+        parentItems.add({
+          'id': folder.id,
+          'name': folder.name,
+          'level': level,
+          'isCollection': false,
+        });
+        addFolders(folder.folders, level + 1);
+      }
+    }
+
+    for (var col in provider.collections) {
+      parentItems.add({
+        'id': col.id,
+        'name': col.name,
+        'level': 0,
+        'isCollection': true,
+      });
+      addFolders(col.folders, 1);
+    }
+
+    // Pre-select first parent if exists
+    if (parentItems.isNotEmpty) {
+      selectedParentId = parentItems.first['id'];
+    }
+
+    void submit() {
+      if (selectedParentId != null && nameController.text.trim().isNotEmpty) {
+        provider.saveRequestToParent(selectedParentId!, nameController.text.trim(), provider.request);
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Saved to collection'), 
+            behavior: SnackBarBehavior.floating, 
+            width: 250,
+          )
+        );
+      }
     }
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Save Request'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-                const SizedBox(height: 4),
-                TextField(
-                  controller: nameController,
-                  autofocus: true,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(hintText: 'e.g. Get User Invoices'),
-                  onChanged: (_) => setDialogState(() {}), // Refresh Save button state
-                ),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          void submit() {
+            if (selectedParentId != null && nameController.text.trim().isNotEmpty) {
+              provider.saveRequestToParent(selectedParentId!, nameController.text.trim(), provider.request);
+              Navigator.pop(dialogContext);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Saved to collection'), 
+                  behavior: SnackBarBehavior.floating, 
+                  width: 250,
+                )
+              );
+            }
+          }
+
+          return CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.enter): submit,
+              const SingleActivator(LogicalKeyboardKey.numpadEnter): submit,
+            },
+            child: AlertDialog(
+              title: const Text('Save Request'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: nameController,
+                      autofocus: true,
+                      style: const TextStyle(fontSize: 13),
+                      decoration: const InputDecoration(hintText: 'e.g. Get User Invoices'),
+                      onChanged: (_) => setDialogState(() {}), // Refresh Save button state
+                      onSubmitted: (_) => submit(),
+                    ),
                 const SizedBox(height: 16),
-                const Text('Collection', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const Text('Location', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
                 const SizedBox(height: 4),
                 if (provider.collections.isEmpty)
                   Container(
@@ -129,11 +190,29 @@ class _MainScreenState extends State<MainScreen> {
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         isExpanded: true,
-                        value: selectedCollectionId,
+                        value: selectedParentId,
                         style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface),
-                        onChanged: (val) => setDialogState(() => selectedCollectionId = val),
-                        items: provider.collections.map((c) {
-                          return DropdownMenuItem(value: c.id, child: Text(c.name));
+                        onChanged: (val) => setDialogState(() => selectedParentId = val),
+                        items: parentItems.map((item) {
+                          final int level = item['level'];
+                          final bool isCol = item['isCollection'];
+                          return DropdownMenuItem<String>(
+                            value: item['id'],
+                            child: Padding(
+                              padding: EdgeInsets.only(left: level * 16.0),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isCol ? Icons.inventory_2_outlined : Icons.folder_outlined,
+                                    size: 16,
+                                    color: isCol ? Theme.of(context).colorScheme.primary : Colors.amber,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(item['name']),
+                                ],
+                              ),
+                            ),
+                          );
                         }).toList(),
                       ),
                     ),
@@ -142,6 +221,26 @@ class _MainScreenState extends State<MainScreen> {
                 TextButton.icon(
                   onPressed: () {
                     final newColController = TextEditingController();
+                    void submitNewCollection() {
+                      if (newColController.text.isNotEmpty) {
+                        provider.createCollection(newColController.text);
+                        final newId = provider.collections.last.id;
+                        Navigator.pop(context);
+                        
+                        // Rebuild parent items for the outer dialog
+                        parentItems.add({
+                          'id': newId,
+                          'name': newColController.text,
+                          'level': 0,
+                          'isCollection': true,
+                        });
+
+                        setDialogState(() {
+                          selectedParentId = newId;
+                        });
+                      }
+                    }
+
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
@@ -150,20 +249,12 @@ class _MainScreenState extends State<MainScreen> {
                           controller: newColController,
                           autofocus: true,
                           decoration: const InputDecoration(hintText: 'Collection Name'),
+                          onSubmitted: (_) => submitNewCollection(),
                         ),
                         actions: [
                           TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
                           ElevatedButton(
-                            onPressed: () {
-                              if (newColController.text.isNotEmpty) {
-                                provider.createCollection(newColController.text);
-                                final newId = provider.collections.last.id;
-                                Navigator.pop(context);
-                                setDialogState(() {
-                                  selectedCollectionId = newId;
-                                });
-                              }
-                            },
+                            onPressed: submitNewCollection,
                             child: const Text('CREATE'),
                           ),
                         ],
@@ -179,26 +270,18 @@ class _MainScreenState extends State<MainScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
             ElevatedButton(
-              onPressed: (selectedCollectionId == null || nameController.text.trim().isEmpty) 
+              onPressed: (selectedParentId == null || nameController.text.trim().isEmpty) 
                 ? null 
-                : () {
-                    provider.saveRequestToCollection(selectedCollectionId!, nameController.text.trim(), provider.request);
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Saved to collection'), 
-                        behavior: SnackBarBehavior.floating, 
-                        width: 250,
-                      )
-                    );
-                  },
+                : submit,
               child: const Text('SAVE'),
             ),
           ],
         ),
-      ),
-    );
-  }
+      );
+    },
+  ),
+);
+}
 
   @override
   Widget build(BuildContext context) {
@@ -232,9 +315,24 @@ class _MainScreenState extends State<MainScreen> {
                 child: MouseRegion(
                   cursor: SystemMouseCursors.resizeLeftRight,
                   child: Container(
-                    width: 4,
-                    color: Colors.transparent,
+                    width: 6,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).dividerColor.withOpacity(0.05),
+                      border: Border(
+                        left: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.2), width: 1),
+                      ),
+                    ),
                     height: double.infinity,
+                    child: Center(
+                      child: Container(
+                        width: 1,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).dividerColor.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -322,7 +420,20 @@ class _MainScreenState extends State<MainScreen> {
                         SizedBox(
                           height: 44,
                           child: ElevatedButton(
-                            onPressed: () => _showSaveDialog(context, restProvider),
+                            onPressed: () {
+                              if (restProvider.activeSavedRequestId != null) {
+                                restProvider.updateActiveSavedRequest();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Request updated'), 
+                                    behavior: SnackBarBehavior.floating, 
+                                    width: 250,
+                                  )
+                                );
+                              } else {
+                                _showSaveDialog(context, restProvider);
+                              }
+                            },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.blue[700],
                               shape: const RoundedRectangleBorder(
@@ -333,7 +444,11 @@ class _MainScreenState extends State<MainScreen> {
                               ),
                               padding: const EdgeInsets.symmetric(horizontal: 12),
                             ),
-                            child: const Icon(Icons.bookmark_add_outlined, size: 18, color: Colors.white),
+                            child: Icon(
+                              restProvider.activeSavedRequestId != null ? Icons.save : Icons.bookmark_add_outlined, 
+                              size: 18, 
+                              color: Colors.white
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -343,51 +458,62 @@ class _MainScreenState extends State<MainScreen> {
                             final curl = restProvider.generateCurl();
                             showDialog(
                               context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('cURL Preview'),
-                                content: Container(
-                                  width: 600,
-                                  constraints: const BoxConstraints(maxHeight: 400),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).brightness == Brightness.dark 
-                                        ? const Color(0xFF1E1E1E) 
-                                        : const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
-                                  ),
-                                  child: SingleChildScrollView(
-                                    child: SelectableText(
-                                      curl,
-                                      style: const TextStyle(
-                                        fontFamily: 'monospace',
-                                        fontSize: 12,
-                                        height: 1.4,
+                              builder: (context) {
+                                void copy() {
+                                  Clipboard.setData(ClipboardData(text: curl));
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('cURL copied to clipboard'),
+                                      behavior: SnackBarBehavior.floating,
+                                      width: 250,
+                                    ),
+                                  );
+                                }
+
+                                return CallbackShortcuts(
+                                  bindings: {
+                                    const SingleActivator(LogicalKeyboardKey.enter): copy,
+                                    const SingleActivator(LogicalKeyboardKey.numpadEnter): copy,
+                                  },
+                                  child: AlertDialog(
+                                    title: const Text('cURL Preview'),
+                                    content: Container(
+                                      width: 600,
+                                      constraints: const BoxConstraints(maxHeight: 400),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).brightness == Brightness.dark 
+                                            ? const Color(0xFF1E1E1E) 
+                                            : const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                                      ),
+                                      child: SingleChildScrollView(
+                                        child: SelectableText(
+                                          curl,
+                                          style: const TextStyle(
+                                            fontFamily: 'monospace',
+                                            fontSize: 12,
+                                            height: 1.4,
+                                          ),
+                                        ),
                                       ),
                                     ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('CLOSE'),
+                                      ),
+                                      ElevatedButton(
+                                        autofocus: true,
+                                        onPressed: copy,
+                                        child: const Text('COPY'),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('CLOSE'),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      Clipboard.setData(ClipboardData(text: curl));
-                                      Navigator.pop(context);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('cURL copied to clipboard'),
-                                          behavior: SnackBarBehavior.floating,
-                                          width: 250,
-                                        ),
-                                      );
-                                    },
-                                    child: const Text('COPY'),
-                                  ),
-                                ],
-                              ),
+                                );
+                              },
                             );
                           },
                           tooltip: 'Preview & Copy as cURL',
@@ -429,7 +555,7 @@ class _ResizablePanels extends StatefulWidget {
 }
 
 class _ResizablePanelsState extends State<_ResizablePanels> {
-  double _topHeightFactor = 0.5;
+  double _topHeightFactor = 0.4;
 
   @override
   Widget build(BuildContext context) {
@@ -455,13 +581,19 @@ class _ResizablePanelsState extends State<_ResizablePanels> {
               child: MouseRegion(
                 cursor: SystemMouseCursors.resizeUpDown,
                 child: Container(
-                  height: 10,
+                  height: 12,
                   width: double.infinity,
-                  color: Colors.transparent,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).dividerColor.withOpacity(0.05),
+                    border: Border(
+                      top: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1), width: 0.5),
+                      bottom: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1), width: 0.5),
+                    ),
+                  ),
                   child: Center(
                     child: Container(
-                      height: 1,
-                      width: 60,
+                      height: 1.5,
+                      width: 40,
                       decoration: BoxDecoration(
                         color: Theme.of(context).dividerColor.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(1),
